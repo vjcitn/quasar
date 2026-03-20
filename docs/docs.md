@@ -124,9 +124,32 @@ To construct the GRM we recommend using the plink2 --make-king command after pru
 quasar produces two files:
 
 * {out-prefix}-quasar-variant.txt which contains variant information
-* {out-prefix}-quasar-cis-gene.txt which contains gene information
+* {out-prefix}-quasar-cis-region.txt which contains gene information
 
-This files are written into the directory which quasar is run in.
+### Variant output
+
+The variant level output of quasar has the following basic format:
+
+```
+     feature_id            snp_id     chrom       pos      alt     ref     maf     beta     se     pvalue
+ENSG00000100181    22:16849971A-T        22  16849971        T      A     0.39    0.012  0.038     0.7385
+           ...
+```
+
+In the output the `alt` allele is the effect allele. Other columns including `glm_converged`, `glmm_converged`, `phi`, `phi_converged` encode information about the gene-level models fit to the expression data and are included depending on the type of model used.
+
+### Region level output
+
+```
+     feature_id     chrom       start       end     pvalue
+ENSG00000100181        22    17082776  17082777   0.796123
+ENSG00000069998        22    17646176  17646177  0.0388123
+            ...
+```
+
+In this output, the pvalue is computed by applying the Aggregated Cauchy Association Test to the variant-level pvalues in the region.
+
+These files are written into the directory which quasar is run in.
 
 ## Option list
 
