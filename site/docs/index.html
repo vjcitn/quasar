@@ -132,9 +132,11 @@
     --out nb_fit
 </code></pre>
 <h2 id="qtl-mapping-modes">QTL mapping modes</h2>
-<p>The quasar software can be run in three modes: <code>cis</code>, <code>trans</code>, <code>gwas</code>. These modes specify which varaints are tested for asscociation with a particular feature. </p>
-<p>In mode <code>cis</code> variants within +- the window size of the gene (see phenotype data format for details). By default the window size is set to 1Mb but can be specified using the <code>--window_size</code> flag. We refer to this set of variants as the cis-window for that feature. </p>
-<p>In mode <code>trans</code> all variants except those in the cis window are tested for assoication. In mode <code>gwas</code> all variants are are tested for association. </p>
+<p>The quasar software can be run in four model modes: <code>cis</code>, <code>trans</code>, <code>gwas</code> and <code>residualise</code>. The first three modes specify which varaints are tested for asscociation with a particular feature, while the fourth outputs residualised expression values for all genes.</p>
+<p>In mode <code>cis</code>, variants within +- the window size of the gene (see phenotype data format for details). By default the window size is set to 1Mb but can be specified using the <code>--window_size</code> flag. We refer to this set of variants as the cis-window for that feature. </p>
+<p>In mode <code>trans</code>, all variants except those in the cis window are tested for assoication. </p>
+<p>In mode <code>gwas</code>, all variants are are tested for association. </p>
+<p>In mode <code>resiudualise</code>, only the first step of quasar's algorithm is performed where gene's expression values are residulised -- the effect of the provided nuisance covariate is removed. The residualised data is then output in the same format as the inpu phenotype data. The residualised expression values are useful for plotting example eQTLs identified by quasar.</p>
 <p>Note that during the development of quasar the <code>cis</code> mode was tested more extensively than the <code>trans</code> and <code>gwas</code> modes and that there are methodological issues with trans-eQTL mapping due to reads mapping to multiple locations causing false-positive associations. </p>
 <h2 id="statistical-models">Statistical models</h2>
 <p>The quasar software package supports a wide range of statistical models used to resiudalise the expression values. The supported models are:</p>
@@ -192,9 +194,23 @@ columns give feature information and the rest are sample ids are the sample ids.
 <p>quasar produces two files:</p>
 <ul>
 <li>{out-prefix}-quasar-variant.txt which contains variant information</li>
-<li>{out-prefix}-quasar-cis-gene.txt which contains gene information</li>
+<li>{out-prefix}-quasar-cis-region.txt which contains gene information</li>
 </ul>
-<p>This files are written into the directory which quasar is run in.</p>
+<h3 id="variant-output">Variant output</h3>
+<p>The variant level output of quasar has the following basic format:</p>
+<pre><code>     feature_id            snp_id     chrom       pos      alt     ref     maf     beta     se     pvalue
+ENSG00000100181    22:16849971A-T        22  16849971        T      A     0.39    0.012  0.038     0.7385
+           ...
+</code></pre>
+<p>In the output the <code>alt</code> allele is the effect allele. Other columns including <code>glm_converged</code>, <code>glmm_converged</code>, <code>phi</code>, <code>phi_converged</code> encode information about the gene-level models fit to the expression data and are included depending on the type of model used.</p>
+<h3 id="region-level-output">Region level output</h3>
+<pre><code>     feature_id     chrom       start       end     pvalue
+ENSG00000100181        22    17082776  17082777   0.796123
+ENSG00000069998        22    17646176  17646177  0.0388123
+            ...
+</code></pre>
+<p>In this output, the pvalue is computed by applying the Aggregated Cauchy Association Test to the variant-level pvalues in the region.</p>
+<p>These files are written into the directory which quasar is run in.</p>
 <h2 id="option-list">Option list</h2>
 <table>
 <thead>
@@ -240,7 +256,7 @@ columns give feature information and the rest are sample ids are the sample ids.
 <td><code>--mode</code></td>
 <td>STRING</td>
 <td>Required</td>
-<td>The mode used to run quasar in. One of: <code>cis</code>, <code>trans</code>, <code>gwas</code>.</td>
+<td>The mode used to run quasar in. One of: <code>cis</code>, <code>trans</code>, <code>gwas</code> or <code>residualise</code>.</td>
 </tr>
 <tr>
 <td><code>--model</code></td>
