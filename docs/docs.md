@@ -38,7 +38,7 @@ In mode `trans`, all variants except those in the cis window are tested for asso
 
 In mode `gwas`, all variants are are tested for association. 
 
-In mode `resiudualise`, only the first step of quasar's algorithm is performed where gene's expression values are residulised -- the effect of the provided nuisance covariate is removed. The residualised data is then output in the same format as the inpu phenotype data. The residualised expression values are useful for plotting example eQTLs identified by quasar.
+In mode `residualise`, only the first step of quasar's algorithm is performed where gene's expression values are residulised -- the effect of the provided nuisance covariate is removed. The residualised data is then output in the same format as the inpu phenotype data. The residualised expression values are useful for plotting example eQTLs identified by quasar.
 
 Note that during the development of quasar the `cis` mode was tested more extensively than the `trans` and `gwas` modes and that there are methodological issues with trans-eQTL mapping due to reads mapping to multiple locations causing false-positive associations. 
 
