@@ -14,22 +14,26 @@ jobs:
           - os: ubuntu-22.04
             artifact: quasar-linux-x86_64
             binary: build/quasar
+            release_name: quasar-linux-x86_64
             cmake_extra: >-
               -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++"
 
           - os: macos-14
             artifact: quasar-macos-arm64
             binary: build/quasar
+            release_name: quasar-macos-arm64
             cmake_extra: ""
 
           - os: macos-13
             artifact: quasar-macos-x86_64
             binary: build/quasar
+            release_name: quasar-macos-x86_64
             cmake_extra: ""
 
           - os: windows-latest
             artifact: quasar-windows-x86_64
             binary: build/Release/quasar.exe
+            release_name: quasar-windows-x86_64.exe
             cmake_extra: ""
 
     runs-on: ${{ matrix.os }}
@@ -73,8 +77,53 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Rename binary for release
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp ${{ matrix.binary }} dist/${{ matrix.release_name }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.binary }}
+          path: dist/${{ matrix.release_name }}
+
+  release:
+    name: Publish latest pre-release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Show collected binaries
+        run: ls -lh dist/
+
+      - name: Update latest pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest build"
+          prerelease: true
+          make_latest: false
+          body: |
+            Automated build from commit ${{ github.sha }}.
+
+            Download the binary for your platform:
+            | Platform | File |
+            |---|---|
+            | Linux x86-64 | `quasar-linux-x86_64` |
+            | macOS Apple Silicon | `quasar-macos-arm64` |
+            | macOS Intel | `quasar-macos-x86_64` |
+            | Windows x86-64 | `quasar-windows-x86_64.exe` |
+
+            On Linux/macOS run `chmod +x quasar-*` after downloading.
+          files: dist/*
