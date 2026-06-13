@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_CXX_STANDARD 14)
 
+project(quasar)
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -15,8 +17,6 @@ else()
   set(CMAKE_CXX_FLAGS_DEBUG "-g")
   set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fno-math-errno -fno-trapping-math")
 endif()
-
-project(quasar)
 
 FIND_PACKAGE(Boost)
 IF (Boost_FOUND)
