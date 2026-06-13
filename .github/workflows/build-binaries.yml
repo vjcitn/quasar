@@ -24,12 +24,6 @@ jobs:
             release_name: quasar-macos-arm64
             cmake_extra: ""
 
-          - os: macos-13
-            artifact: quasar-macos-x86_64
-            binary: build/quasar
-            release_name: quasar-macos-x86_64
-            cmake_extra: ""
-
           - os: windows-latest
             artifact: quasar-windows-x86_64
             binary: build/Release/quasar.exe
@@ -122,7 +116,6 @@ jobs:
             |---|---|
             | Linux x86-64 | `quasar-linux-x86_64` |
             | macOS Apple Silicon | `quasar-macos-arm64` |
-            | macOS Intel | `quasar-macos-x86_64` |
             | Windows x86-64 | `quasar-windows-x86_64.exe` |
 
             On Linux/macOS run `chmod +x quasar-*` after downloading.
