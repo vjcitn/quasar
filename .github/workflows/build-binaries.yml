@@ -1,0 +1,80 @@
+name: Build quasar binaries
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: quasar-linux-x86_64
+            binary: build/quasar
+            cmake_extra: >-
+              -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc -static-libstdc++"
+
+          - os: macos-14
+            artifact: quasar-macos-arm64
+            binary: build/quasar
+            cmake_extra: ""
+
+          - os: macos-13
+            artifact: quasar-macos-x86_64
+            binary: build/quasar
+            cmake_extra: ""
+
+          - os: windows-latest
+            artifact: quasar-windows-x86_64
+            binary: build/Release/quasar.exe
+            cmake_extra: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Boost (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libboost-dev
+
+      - name: Install Boost (macOS)
+        if: runner.os == 'macOS'
+        run: brew install boost
+
+      - name: Find Boost (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $d = Get-ChildItem C:\local -Filter boost_* -ErrorAction SilentlyContinue |
+               Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $d) {
+            choco install boost-msvc-14.3 --no-progress -y
+            $d = Get-ChildItem C:\local -Filter boost_* |
+                 Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty FullName
+          }
+          echo "BOOST_ROOT=$d" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "Boost found at $d"
+
+      - name: Configure (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          ${{ matrix.cmake_extra }}
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -DBOOST_ROOT="${{ env.BOOST_ROOT }}"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
