@@ -24,6 +24,21 @@ IF (Boost_FOUND)
     ADD_DEFINITIONS( "-DHAS_BOOST" )
 ENDIF()
 
+# OpenMP — Apple Clang needs libomp from Homebrew; hint its location
+if(APPLE)
+  execute_process(COMMAND brew --prefix libomp
+                  OUTPUT_VARIABLE HOMEBREW_LIBOMP
+                  OUTPUT_STRIP_TRAILING_WHITESPACE
+                  ERROR_QUIET)
+  if(HOMEBREW_LIBOMP)
+    set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I${HOMEBREW_LIBOMP}/include")
+    set(OpenMP_CXX_LIB_NAMES "omp")
+    set(OpenMP_omp_LIBRARY "${HOMEBREW_LIBOMP}/lib/libomp.dylib")
+  endif()
+endif()
+
+find_package(OpenMP COMPONENTS CXX)
+
 add_executable(quasar
   ${CMAKE_SOURCE_DIR}/src/Quasar.cpp
   ${CMAKE_SOURCE_DIR}/src/Data.cpp
@@ -36,6 +51,13 @@ add_executable(quasar
   ${CMAKE_SOURCE_DIR}/src/QTLMappingUtils.cpp
 )
 target_include_directories(quasar PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+if(OpenMP_CXX_FOUND)
+  message(STATUS "OpenMP found — building with parallel score tests")
+  target_link_libraries(quasar OpenMP::OpenMP_CXX)
+else()
+  message(STATUS "OpenMP not found — building single-threaded")
+endif()
 
 set(EXTERN_LIBS_PATH "${CMAKE_SOURCE_DIR}/external_libs")
 

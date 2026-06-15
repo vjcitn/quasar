@@ -22,6 +22,9 @@
 #include <vector>
 #include <string>
 #include <numeric>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 void score_test(Params& params, ModelFit& model_fit, GenoData& geno_data, PhenoData& pheno_data, CovData& cov_data) {
 
@@ -47,7 +50,18 @@ void score_test(Params& params, ModelFit& model_fit, GenoData& geno_data, PhenoD
         region_file << region_header_line;
     }
 
-    // Iterate over features.
+    // Collect per-feature output strings; written sequentially after the
+    // parallel section to avoid file-stream race conditions.
+    std::vector<std::string> variant_output(pheno_data.n_pheno);
+    std::vector<std::string> region_output(pheno_data.n_pheno);
+
+    bool mode_cis   = (mode == "cis");
+    bool mode_trans = (mode == "trans");
+
+    // Iterate over features — parallelised over the feature axis.
+    // Each feature is fully independent: separate G column slice, separate
+    // weights, separate output buffer.
+#pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < pheno_data.n_pheno; ++i) {
 
         std::vector<double> pvals;
@@ -58,29 +72,30 @@ void score_test(Params& params, ModelFit& model_fit, GenoData& geno_data, PhenoD
         int cis_window_n = pheno_data.window_n[i];
         int chrom = pheno_data.chrom[i];
 
-        bool mode_trans = mode == "trans";
-
-        if (mode == "cis") {
+        if (mode_cis) {
             window_start = cis_window_start;
-            window_end = cis_window_end; 
+            window_end = cis_window_end;
             window_n = cis_window_n;
         } else {
             window_start = 0;
             window_end = n_snps;
             window_n = n_snps;
         }
-       
-        const Eigen::MatrixXd& G_slice = G.middleCols(window_start, window_n);
+
+        const Eigen::MatrixXd G_slice = G.middleCols(window_start, window_n);
 
         if (params.verbose) {
-            if (mode == "cis") {
-                std::cout << "Processing " << window_n << 
+#pragma omp critical
+            {
+            if (mode_cis) {
+                std::cout << "Processing " << window_n <<
                     " SNPs for " << pheno_data.pheno_ids[i] <<
                     " in region: " << geno_data.chrom[window_start] <<
                     ":" << geno_data.pos[window_start] <<
-                    "-" <<  geno_data.pos[window_end] << std::endl;
+                    "-" << geno_data.pos[window_end] << std::endl;
             } else {
                 std::cout << "Processing SNPs for " << pheno_data.pheno_ids[i] << std::endl;
+            }
             }
         }
 
@@ -93,20 +108,19 @@ void score_test(Params& params, ModelFit& model_fit, GenoData& geno_data, PhenoD
         }
 
         // Pre-calculate matrices used in covariate adjustment.
-        Eigen::MatrixXd XtWX_inv, Xt;
-        XtWX_inv = (X.transpose() * w.asDiagonal() * X).inverse();
-        Xt = X.transpose();
+        Eigen::MatrixXd XtWX_inv = (X.transpose() * w.asDiagonal() * X).inverse();
+        Eigen::MatrixXd Xt = X.transpose();
 
         Eigen::VectorXd g_s(n_samples);
         Eigen::VectorXd g(n_samples);
-        
+
+        std::stringstream local_variants;
+
         // Iterate over SNPs in the window.
         for (int k = window_start; k < window_end; ++k) {
-            
-            // Index into G_slice from 0 to window_n.
-            int slice_ind = k - window_start; 
 
-            std::stringstream variant_line;
+            int slice_ind = k - window_start;
+
             double beta, se, u, v, gtg, zscore, pval_esnp;
 
             // Exclude variants in the cis window when in trans mode.
@@ -114,9 +128,9 @@ void score_test(Params& params, ModelFit& model_fit, GenoData& geno_data, PhenoD
                 continue;
             }
 
-            g = G_slice.col(slice_ind); 
+            g = G_slice.col(slice_ind);
             g_s = g - X * (XtWX_inv * (Xt * g.cwiseProduct(w)));
-            
+
             u = g_s.cwiseProduct(w).dot(Y.col(i));
             gtg = g_s.cwiseProduct(w).dot(g_s);
             v = gtg;
@@ -139,11 +153,11 @@ void score_test(Params& params, ModelFit& model_fit, GenoData& geno_data, PhenoD
             if (std::abs(geno_data.maf[k]) < 1e-8) {
                 beta = se = zscore = pval_esnp = std::numeric_limits<double>::quiet_NaN();
             }
-            if (mode == "cis") {
+            if (mode_cis) {
                 pvals.push_back(pval_esnp);
             }
 
-            variant_line << 
+            local_variants <<
                 pheno_data.pheno_ids[i] << "\t" <<
                 geno_data.snp_id[k] << "\t" <<
                 geno_data.chrom[k] << "\t" <<
@@ -151,39 +165,44 @@ void score_test(Params& params, ModelFit& model_fit, GenoData& geno_data, PhenoD
                 geno_data.alt[k] << "\t" <<
                 geno_data.ref[k] << "\t" <<
                 geno_data.maf[k] << "\t" <<
-                beta << "\t" << 
+                beta << "\t" <<
                 se << "\t" <<
                 pval_esnp;
 
             if (model == "p_glm") {
-                variant_line << "\t" << model_fit.glm_converged[i];
+                local_variants << "\t" << model_fit.glm_converged[i];
             } else if (model == "nb_glm") {
-                variant_line << "\t" << model_fit.glm_converged[i] <<
+                local_variants << "\t" << model_fit.glm_converged[i] <<
                     "\t" << model_fit.phi[i] <<
                     "\t" << model_fit.phi_converged[i];
             } else if (model == "p_glmm") {
-                variant_line << "\t" << model_fit.glmm_converged[i];
+                local_variants << "\t" << model_fit.glmm_converged[i];
             } else if (model == "nb_glmm") {
-                variant_line << "\t" << model_fit.glmm_converged[i] << 
+                local_variants << "\t" << model_fit.glmm_converged[i] <<
                     "\t" << model_fit.phi[i] <<
                     "\t" << model_fit.phi_converged[i];
             }
-
-            variant_line << "\n";
-            variant_file << variant_line.str();
+            local_variants << "\n";
         }
 
-        if (mode == "cis") {
-            std::stringstream region_line;
+        variant_output[i] = local_variants.str();
 
-            region_line << 
+        if (mode_cis) {
+            std::stringstream region_line;
+            region_line <<
                 pheno_data.pheno_ids[i] << "\t" <<
                 pheno_data.chrom[i] << "\t" <<
                 pheno_data.start[i] << "\t" <<
                 pheno_data.end[i] << "\t" <<
                 ACAT(pvals) << "\n";
-            region_file << region_line.str();
+            region_output[i] = region_line.str();
         }
+    }
+
+    // Write collected output sequentially (preserves feature order).
+    for (size_t i = 0; i < pheno_data.n_pheno; ++i) {
+        variant_file << variant_output[i];
+        if (mode_cis) region_file << region_output[i];
     }
 
     if (mode == "cis") {

@@ -39,9 +39,9 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get install -y libboost-dev
 
-      - name: Install Boost (macOS)
+      - name: Install Boost and libomp (macOS)
         if: runner.os == 'macOS'
-        run: brew install boost
+        run: brew install boost libomp
 
       - name: Find Boost (Windows)
         if: runner.os == 'Windows'
